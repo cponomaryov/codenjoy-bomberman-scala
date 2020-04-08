@@ -1,5 +1,7 @@
 package com.codenjoy.dojo.bomberman.client
 
+import com.codenjoy.dojo.services.Direction
+
 sealed trait Move {
   override def toString: String = this match {
     case Left => "LEFT"
@@ -26,7 +28,7 @@ case object NoBomb extends Bomb
 case object BombBeforeMove extends Bomb
 case object BombAfterMove extends Bomb
 
-case class Action(move: Move, bomb: Bomb = NoBomb) {
+case class Action(move: Direction, bomb: Bomb = NoBomb) {
   override def toString: String = {
     bomb match {
       case NoBomb => move.toString

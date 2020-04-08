@@ -1,11 +1,6 @@
 *.class
 *.log
-.idea/.gitignore
-.idea/sbt.xml
+.idea
 src/main/webapp/
-target/antrun/
-target/bomberman-engine-sources.jar
-target/bomberman-engine.jar
-target/generated-sources/
-target/maven-archiver/
-target/maven-status/
+target
+*.iml

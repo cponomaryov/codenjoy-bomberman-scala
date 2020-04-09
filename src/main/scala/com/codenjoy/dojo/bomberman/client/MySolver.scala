@@ -43,51 +43,35 @@ class MySolver extends Solver[MyBoard] {
         .getOrElse(Action(STOP))
     } else if (meatChoppersDeathZone.contains(myBomberman)) {
       println("meatChoppersDeathZone")
-      plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb)
+      plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb, true)
     } else if (blastsZone.contains(myBomberman)) {
       println("blastsZone")
       closestEscape(myBomberman, dangerZone).flatMap(_.headOption).filterNot(d => deathZone.contains(d.change(myBomberman))).map(d => Action(d)).getOrElse(Action(STOP))
     } else if (meatChoppersZone.contains(myBomberman)) {
       println("meatChoppersZone")
-      plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb)
-    } else getNearest(myBomberman, b.getOtherBombermans) match {
-      case Some((nearestBomberman, _)) if zone(nearestBomberman).contains(myBomberman) =>
-        plantBombAndEscape(myBomberman, dangerZone, deathZone, BombBeforeMove)
-      case Some((_, path)) =>
-        path.headOption match {
-          case Some(direction) if dangerZone.contains(direction.change(myBomberman)) =>
-            Action(STOP)
-          case Some(direction) =>
-            Action(direction)
-          case None =>
-            plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb)
-        }
-      case _ =>
-        getNearest(myBomberman, b.getMeatChoppers) match {
-          case Some((nearestMeatChopper, _)) if zone(nearestMeatChopper).contains(myBomberman) =>
-            plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb)
-          case Some((_, path)) =>
-            path.headOption match {
-              case Some(direction) if dangerZone.contains(direction.change(myBomberman)) =>
-                Action(STOP)
-              case Some(direction) =>
-                Action(direction)
-              case None =>
-                plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb)
-            }
-          case _ =>
-            Action(STOP, BombBeforeMove)
-        }
-        Action(STOP, BombBeforeMove)
-    }
+      plantBombAndEscape(myBomberman, dangerZone, deathZone, NoBomb, true)
+    } else if (b.getOtherBombermans.flatMap(b => zone(b)).contains(myBomberman)) {
+      println("bombermansZone")
+      plantBombAndEscape(myBomberman, dangerZone, deathZone, BombBeforeMove)
+    } else moveToNearest(myBomberman, b.getOtherBombermans, dangerZone)
+      .orElse(moveToNearest(myBomberman, b.getMeatChoppers, dangerZone))
+      .getOrElse(
+        if (b.isNear(myBomberman, DESTROYABLE_WALL))
+          plantBombAndEscape(myBomberman, dangerZone, deathZone, BombBeforeMove)
+        else
+          moveToNearest(myBomberman, b.getDestroyableWalls, dangerZone).getOrElse(Action(STOP))
+      )
   }
 
-  private def plantBombAndEscape(myBomberman: Point, dangerZone: Set[Point], deathZone: Set[Point], fallbackBomb: Bomb) =
-    closestEscape(myBomberman, dangerZone ++ zone(myBomberman))
+  private def moveToNearest(myBomberman: Point, points: Set[Point], dangerZone: Set[Point]) =
+    getNearest(myBomberman, points).map { case (_, path) => Action(if (dangerZone.contains(path.head.change(myBomberman))) STOP else path.head)}
+
+  private def plantBombAndEscape(myBomberman: Point, dangerZone: Set[Point], deathZone: Set[Point], fallbackBomb: Bomb, towardsBomberman: Boolean = false) =
+    closestEscape(myBomberman, dangerZone ++ zone(myBomberman), towardsBomberman)
       .flatMap(_.headOption)
       .filterNot(d => deathZone.contains(d.change(myBomberman)))
       .map(d => Action(d, BombBeforeMove))
-      .orElse(closestEscape(myBomberman, dangerZone)
+      .orElse(closestEscape(myBomberman, dangerZone, towardsBomberman)
         .flatMap(_.headOption)
         .filterNot(d => deathZone.contains(d.change(myBomberman)))
         .map(d => Action(d)))
@@ -116,7 +100,7 @@ class MySolver extends Solver[MyBoard] {
   def zone(point: Point, length: Int = 3): Set[Point] =
     zoneAround(point, length) + point
 
-  def closestEscape(from: Point, dangerZone: Set[Point]): Option[Seq[Direction]] = {
+  def closestEscape(from: Point, dangerZone: Set[Point], towardsBomberman: Boolean = false): Option[Seq[Direction]] = {
     var visited: Set[Point] = Set(from)
     var queue: List[(Point, Seq[Direction])] = List(from -> Seq.empty)
     var h = 0
@@ -130,8 +114,9 @@ class MySolver extends Solver[MyBoard] {
         val newY = direction.changeY(currentPoint.getY)
         pt(newX, newY) -> direction
       })
-      newPoints
-        .filter(newPoint => !b.getImpassable.contains(newPoint._1) && !visited.contains(newPoint._1))
+      val possiblePoints = newPoints.filter(newPoint => !b.getImpassable.contains(newPoint._1) && !visited.contains(newPoint._1))
+      val sortedPoints = if (towardsBomberman) possiblePoints.sortBy { case (p, _) => getNearest(p, b.getOtherBombermans).map(_._2.length).getOrElse(100)} else possiblePoints
+      sortedPoints
         .foreach(point => {
           queue = queue.:+(point._1 -> (currentDirections ++ Seq(point._2)))
           visited ++= Set(point._1)
